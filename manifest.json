@@ -1,0 +1,13 @@
+{
+  "name": "GoodCode-CSS-Generator",
+  "id": "1212387079056189185",
+  "api": "1.0.0",
+  "main": "code.js",
+  "editorType": [
+    "figma"
+  ],
+  "permissions": [
+    "currentuser"
+  ],
+  "ui": "ui.html"
+}

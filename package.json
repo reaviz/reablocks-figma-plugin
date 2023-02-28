@@ -1,0 +1,16 @@
+{
+  "name": "goodcode-css-generator-figma-plugin",
+  "version": "1.0.0",
+  "description": "A Figma plugin to generate CSS from Figma local style as per the Good Code standard format",
+  "main": "code.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "watch": "npm run build -- --watch"
+  },
+  "author": "",
+  "license": "",
+  "devDependencies": {
+    "@figma/plugin-typings": "^1.58.0",
+    "typescript": "*"
+  }
+}

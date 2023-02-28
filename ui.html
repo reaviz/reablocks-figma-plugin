@@ -1,0 +1,37 @@
+<h4>Good Code Figma Style to CSS Generator</h4>
+<textarea name="css-text" id="css-text" cols="40" rows="30"></textarea>
+<button id="generate-css"> Generate CSS</button>
+<button id="copy-css"> Copy CSS</button>
+<style>
+  #checklist-item-container {
+    padding: 4px;
+    font-size: large;
+    width: max-content;
+  }
+
+  h4 {
+    font-family: Inter, Haettenschweiler, 'Arial Narrow Bold', sans-serif;
+  }
+</style>
+
+<script>
+
+const cssTextBox = document.getElementById('css-text');
+
+document.getElementById('generate-css').onclick = () => {
+  parent.postMessage({ pluginMessage: { type: 'generate-css' } }, '*')
+}
+
+document.getElementById('copy-css').onclick = () => {
+  cssTextBox.select();
+  document.execCommand('copy');
+}
+
+
+onmessage = (event) => {
+  if(event.data.pluginMessage.status === 'success'){
+    console.log(event.data.pluginMessage.value)
+    cssTextBox.value = JSON.stringify(event.data.pluginMessage.value);
+  }
+}
+</script>
