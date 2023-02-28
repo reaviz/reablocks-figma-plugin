@@ -30,7 +30,6 @@ document.getElementById('copy-css').onclick = () => {
 
 onmessage = (event) => {
   if(event.data.pluginMessage.status === 'success'){
-    console.log(event.data.pluginMessage.value)
     cssTextBox.value = JSON.stringify(event.data.pluginMessage.value);
   }
 }
