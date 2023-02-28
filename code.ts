@@ -77,5 +77,5 @@ figma.ui.onmessage = msg => {
     const cssObj = generateCSS();
     figma.ui.postMessage({ status: 'success', value: cssObj });
   }
-  figma.closePlugin();
+  // figma.closePlugin();
 };
