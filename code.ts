@@ -1,12 +1,3 @@
-
-// This plugin will open a window to prompt the user to enter a number, and
-// it will then create that many rectangles on the screen.
-
-// This file holds the main code for the plugins. It has access to the *document*.
-// You can access browser APIs in the <script> tag inside "ui.html" which has a
-// full browser environment (see documentation).
-
-// This shows the HTML page in "ui.html".
 figma.showUI(__html__);
 
 
@@ -40,11 +31,11 @@ function generateCSS() {
   const requiredStylesElements = [];
   for (const style of localStyles) {
     if (style.type === 'PAINT' && style.paints[0].type === 'SOLID') {
-      const [colorName, colorWeigth] = getCurrentColorNameAndWeight(style.name);
+      const [colorName, colorWeight] = getCurrentColorNameAndWeight(style.name);
       requiredStylesElements.push({
         fullname: style.name,
         name: colorName,
-        weight: colorWeigth,
+        weight: colorWeight,
         opacity: style.paints[0].opacity,
         hex: rgbaToHex(Math.round(((style.paints[0] as SolidPaint).color.r) * 255), Math.round(((style.paints[0] as SolidPaint).color.g) * 255), Math.round(((style.paints[0] as SolidPaint).color.b * 255)), style.paints[0].opacity ?? 1)
       })
@@ -71,8 +62,6 @@ function generateCSS() {
 figma.ui.resize(600, 600);
 
 figma.ui.onmessage = msg => {
-  // One way of distinguishing between different types of messages sent from
-  // your HTML page is to use an object with a "type" property like this.
   if (msg.type === 'generate-css') {
     const cssObj = generateCSS();
     figma.ui.postMessage({ status: 'success', value: cssObj });
