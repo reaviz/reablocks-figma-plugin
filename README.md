@@ -4,10 +4,19 @@ Plugin with utilities to super charge your dev work for open-sourced [Reablocks 
 
 ### Supported features
 
-The current plugin allows you to quickly generate Reablock compatible CSS code from your Figma design files.
-\* more features coming soon!
+1. Reablock CSS generator: Generate Reablock compatible json from Figma Style variables
+2. more utilities to be added here in future
 
 ### How to use "Reablocks CSS Generator" feature
+
+#### Pre-requisite
+
+- You should have style created for all colors that you want to use in the project
+- You should use following naming convention to assign style property to your colors
+
+  - E.g.: 'Primary', 'Brand', 'Primary/100', 'Brand/title black 100'
+
+#### Running Plugin
 
 - Go to the Figma design file where you want to use the plugin
 - Use cmd + p to open quick menu

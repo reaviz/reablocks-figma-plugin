@@ -16,21 +16,21 @@
 
 <script>
 
-const cssTextBox = document.getElementById('css-text');
+  const cssTextBox = document.getElementById('css-text');
 
-document.getElementById('generate-css').onclick = () => {
-  parent.postMessage({ pluginMessage: { type: 'generate-css' } }, '*')
-}
-
-document.getElementById('copy-css').onclick = () => {
-  cssTextBox.select();
-  document.execCommand('copy');
-}
-
-
-onmessage = (event) => {
-  if(event.data.pluginMessage.status === 'success'){
-    cssTextBox.value = JSON.stringify(event.data.pluginMessage.value);
+  document.getElementById('generate-css').onclick = () => {
+    parent.postMessage({ pluginMessage: { type: 'generate-css' } }, '*')
   }
-}
+
+  document.getElementById('copy-css').onclick = () => {
+    cssTextBox.select();
+    document.execCommand('copy');
+  }
+
+
+  onmessage = (event) => {
+    if (event.data.pluginMessage.status === 'success') {
+      cssTextBox.value = JSON.stringify(event.data.pluginMessage.value);
+    }
+  }
 </script>
