@@ -4,7 +4,7 @@
   "description": "A Figma plugin to generate CSS tokens for reablocks.",
   "main": "code.js",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "webpack",
     "watch": "npm run build -- --watch"
   },
   "author": "Good Code, LLC",
@@ -12,6 +12,13 @@
   "homepage": "https://github.com/reaviz/reablocks-figma-plugin#readme",
   "devDependencies": {
     "@figma/plugin-typings": "^1.58.0",
-    "typescript": "*"
+    "@types/chroma-js": "^2.4.0",
+    "ts-loader": "^9.4.4",
+    "typescript": "^5.1.6",
+    "webpack": "^5.88.2",
+    "webpack-cli": "^5.1.4"
+  },
+  "dependencies": {
+    "chroma-js": "^2.4.2"
   }
 }
