@@ -15,7 +15,6 @@
 </style>
 
 <script>
-
   const cssTextBox = document.getElementById('css-text');
 
   document.getElementById('generate-css').onclick = () => {
@@ -26,7 +25,6 @@
     cssTextBox.select();
     document.execCommand('copy');
   }
-
 
   onmessage = (event) => {
     if (event.data.pluginMessage.status === 'success') {

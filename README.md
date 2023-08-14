@@ -18,12 +18,12 @@ Plugin utilities to super charge your dev work for [reablocks](https://github.co
 ### Running Plugin
 
 - Go to the Figma design file where you want to use the plugin
-- Use `cmd + p`` to open quick menu
+- Use `CMD + p` to open quick menu
 - Search for new plugins using "Find More plugins option" and search for "Reablocks Figma Plugin"
 - Once found, click on run plugin, it will open a popup
 - Click on "Generate CSS"
 - Click on "Copy CSS"
-- Use the copied CSS in your UI project
+- Use the copied CSS tokens to your project
 
 ## Open Source
 Source code is available on [https://github.com/reaviz/reablocks-figma-plugin](Github).

@@ -1,6 +1,6 @@
 figma.showUI(__html__);
 
-const rgbaToHex = (red: number, green: number, blue: number, opacity: number): string => {
+function rgbaToHex(red: number, green: number, blue: number, opacity: number): string {
   if (
     red < 0 ||
     red > 255 ||
@@ -11,7 +11,7 @@ const rgbaToHex = (red: number, green: number, blue: number, opacity: number): s
     opacity < 0 ||
     opacity > 100
   ) {
-    throw new Error("Invalid color value.");
+    throw new Error(`Invalid color value: rgba(${red}, ${green}, ${blue}, ${opacity})`);
   }
 
   const opacityDecimal = Math.round(opacity * 255);
@@ -22,16 +22,17 @@ const rgbaToHex = (red: number, green: number, blue: number, opacity: number): s
   )}`;
 
   return opacityDecimal === 255 ? hex : `${hex}${opacityHex}`;
-};
+}
 
 function generateCSS() {
   const localStyles = figma.getLocalPaintStyles();
   const requiredStylesElements = [];
+
   for (const style of localStyles) {
     if (style.type === "PAINT" && style.paints[0].type === "SOLID") {
       // Example: Split input string like White, 'Primary/100', 'Chart/Chart Red 100' into
       // ['White', undefined], ['Primary', '100'], ['Chart', 'Chart Red 100'] while handling optional secondary value
-      const [primaryLabel, secondaryLabel] = style.name.split("/").map((part) => part.trim());
+      const [primaryLabel, secondaryLabel] = style.name.split('/').map((part) => part.trim());
       requiredStylesElements.push({
         fullName: style.name,
         primaryLabel,
@@ -42,7 +43,7 @@ function generateCSS() {
           Math.round((style.paints[0] as SolidPaint).color.g * 255),
           Math.round((style.paints[0] as SolidPaint).color.b * 255),
           style.paints[0].opacity ?? 1
-        ),
+        )
       });
     }
   }
@@ -55,7 +56,7 @@ function generateCSS() {
       if (secondaryLabel) {
         colorJson[primaryLabel] = {
           ...colorJson[primaryLabel],
-          [secondaryLabel]: hex,
+          [secondaryLabel]: hex
         };
       } else {
         colorJson[primaryLabel] = hex;
@@ -69,9 +70,9 @@ function generateCSS() {
 figma.ui.resize(600, 600);
 
 figma.ui.onmessage = (msg) => {
-  if (msg.type === "generate-css") {
+  if (msg.type === 'generate-css') {
     const cssObj = generateCSS();
-    figma.ui.postMessage({ status: "success", value: cssObj });
+    figma.ui.postMessage({ status: 'success', value: cssObj });
   }
   // figma.closePlugin();
 };
