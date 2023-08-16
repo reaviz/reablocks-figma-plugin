@@ -1,17 +1,33 @@
 {
-  "name": "reablocks-figma-plugin",
-  "version": "1.0.0",
-  "description": "A Figma plugin to generate CSS tokens for reablocks.",
-  "main": "code.js",
-  "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "watch": "npm run build -- --watch"
+  "dependencies": {
+    "@create-figma-plugin/ui": "^2.5.1",
+    "@create-figma-plugin/utilities": "^2.5.1",
+    "chroma-js": "^2.4.2",
+    "preact": ">=10",
+    "prismjs": "^1.28.0",
+    "react-simple-code-editor": "^0.11.2"
   },
-  "author": "Good Code, LLC",
-  "license": "Apache-2.0",
-  "homepage": "https://github.com/reaviz/reablocks-figma-plugin#readme",
   "devDependencies": {
-    "@figma/plugin-typings": "^1.58.0",
-    "typescript": "*"
+    "@create-figma-plugin/build": "^2.5.1",
+    "@create-figma-plugin/tsconfig": "^2.5.1",
+    "@figma/plugin-typings": "1.74.0",
+    "@types/chroma-js": "^2.4.0",
+    "@types/prismjs": "^1.26.0",
+    "@types/react": "^18.2.20",
+    "react": "^18.2.0",
+    "typescript": ">=4"
+  },
+  "scripts": {
+    "build": "build-figma-plugin --typecheck --minify",
+    "watch": "build-figma-plugin --typecheck --watch"
+  },
+  "figma-plugin": {
+    "editorType": [
+      "figma"
+    ],
+    "id": "reablocks-figma-plugin",
+    "name": "Reablocks Figma Plugin",
+    "main": "src/main.ts",
+    "ui": "src/ui.tsx"
   }
 }
