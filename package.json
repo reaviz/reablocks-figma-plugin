@@ -9,6 +9,7 @@
     "@create-figma-plugin/ui": "^2.5.1",
     "@create-figma-plugin/utilities": "^2.5.1",
     "chroma-js": "^2.4.2",
+    "copy-to-clipboard": "^3.3.3",
     "preact": ">=10",
     "prismjs": "^1.28.0",
     "react-simple-code-editor": "^0.11.2"

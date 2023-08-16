@@ -11,6 +11,7 @@ import { emit, once } from "@create-figma-plugin/utilities";
 import { h } from "preact";
 import { useCallback, useState, useEffect} from "preact/hooks";
 import styles from "./styles.css";
+import copy from 'copy-to-clipboard';
 
 function Plugin() {
   const [css, setCSS] = useState(`Click on Generate CSS!`);
@@ -21,24 +22,31 @@ function Plugin() {
 
   useEffect(() => {
     once("SUCCESS", (args) => {
-      setCSS(JSON.stringify(args.value));
+      setCSS(JSON.stringify(args.value, null, 2));
     });
   }, []);
+
+  function copyClipboard() {
+    copy(css);
+  }
 
   return (
     <Container space="large">
       <VerticalSpace space="small" />
       <div class={styles.container}>
         <TextboxMultiline
-          grow
           rows={10}
           placeholder="Click on Generate CSS!"
           value={css}
-        ></TextboxMultiline>
+        />
       </div>
       <VerticalSpace space="large" />
       <Button fullWidth onClick={generateCSSButtonClick}>
         Generate CSS
+      </Button>
+      <VerticalSpace space="small" />
+      <Button fullWidth onClick={copyClipboard}>
+        Copy to clipboard
       </Button>
       <VerticalSpace space="small" />
     </Container>
