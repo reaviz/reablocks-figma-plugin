@@ -35,14 +35,14 @@ function Plugin() {
       <VerticalSpace space="small" />
       <div class={styles.container}>
         <TextboxMultiline
-          rows={10}
-          placeholder="Click on Generate CSS!"
+          rows={23}
+          placeholder="Click on Generate Tokens"
           value={css}
         />
       </div>
       <VerticalSpace space="large" />
       <Button fullWidth onClick={generateCSSButtonClick}>
-        Generate CSS
+        Generate Tokens
       </Button>
       <VerticalSpace space="small" />
       <Button fullWidth onClick={copyClipboard}>

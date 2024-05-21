@@ -14,29 +14,65 @@ interface CSSJson {
 }
 
 export default function () {
-  function generateCSS(): CSSJson {
-    const localStyles = figma.getLocalPaintStyles();
-    const requiredStylesElements: ColorTokenInfo[] = [];
+  function generateColors(): CSSJson {
     let colorJson: { [k: string]: any } = {};
+    /*
+    Examples:
+    {name: 'Mode 1', modeId: '390:0'}
+    {name: 'Light Mode', modeId: '60:0'}
+    {name: 'Dark Mode', modeId: '390:1'}
+    {name: 'Wireframe Mode', modeId: '1282:1'}
+    */
 
-    for (const style of localStyles) {
-      if (style.type === 'PAINT' && style.paints[0].type === 'SOLID') {
-        // Example: Split input string like White, 'Primary/100', 'Chart/Chart Red 100' into
-        // ['White', undefined], ['Primary', '100'], ['Chart', 'Chart Red 100'] while handling optional secondary value
-        const [primaryLabel, secondaryLabel] = style.name
-          .split("/")
-          .map((part) => part.trim().toLowerCase());
-        const { r, g, b } = (style.paints[0] as SolidPaint).color;
-        const hex = chroma.rgb(r * 255, g * 255, b * 255, style.paints[0].opacity ?? 1).hex();
-        if (primaryLabel) {
-          if (secondaryLabel) {
-            colorJson[primaryLabel] = {
-              ...colorJson[primaryLabel],
-              [secondaryLabel]: hex,
-            };
-          } else {
-            colorJson[primaryLabel] = hex;
+    const collections = figma.variables.getLocalVariableCollections();
+    console.log('collections', collections);
+
+    const modes = collections.reduce((cur, col) => {
+      const res = { ...cur };
+      for (const mode of col.modes) {
+        res[mode.modeId] = mode.name;
+      }
+      return res;
+    }, {});
+
+    const tokens = figma.variables.getLocalVariables();
+    console.log('styles', tokens);
+
+    for (const token of tokens) {
+      if (token.resolvedType === 'COLOR') {
+        const modeIds = Object.keys(token.valuesByMode);
+        for (const modeId of modeIds) {
+          // Get the token color
+          const { r, g, b } = token.valuesByMode[modeId] as any;
+          const hex = chroma.rgb(r * 255, g * 255, b * 255).hex();
+
+          // tease out primary and secondary labels
+          let [primaryLabel, secondaryLabel] = token.name
+            .split('/')
+            .map((part) => part.trim().toLowerCase());
+
+          // trim start of label like 'primary 100' to just '100'
+          secondaryLabel = secondaryLabel.replace(primaryLabel, '').trim().toString();
+          if (secondaryLabel[0] === '-') {
+            secondaryLabel = secondaryLabel.substring(1);
           }
+
+          // set default objects
+          const modeName = modes[modeId];
+          if (colorJson[modeName] === undefined) {
+            colorJson[modeName] = {};
+          }
+
+          if (colorJson[modeName][primaryLabel] === undefined) {
+            colorJson[modeName][primaryLabel] = {};
+          }
+
+          if (colorJson[modeName][primaryLabel][secondaryLabel] === undefined) {
+            colorJson[modeName][primaryLabel][secondaryLabel] = {};
+          }
+
+          // Add color to json
+          colorJson[modeName][primaryLabel][secondaryLabel] = hex;
         }
       }
     }
@@ -50,9 +86,9 @@ export default function () {
    * Msg handlers
    */
   on('GENERATE_CSS', () => {
-    const cssObj = generateCSS();
-    emit('SUCCESS', { value: cssObj });
+    const colorsObj = generateColors();
+    emit('SUCCESS', { value: colorsObj });
   });
 
-  showUI({ height: 300, width: 600 });
+  showUI({ height: 500, width: 400 });
 }

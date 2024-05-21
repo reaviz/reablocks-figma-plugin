@@ -1,5 +1,7 @@
 # Reablocks Figma Plugin
 
+![screenshot](screenshot.png)
+
 Plugin utilities to super charge your dev work for [reablocks](https://github.com/reaviz/reablocks)
 
 ## Features
@@ -21,9 +23,9 @@ Plugin utilities to super charge your dev work for [reablocks](https://github.co
 - Use `CMD + p` to open quick menu
 - Search for new plugins using "Find More plugins option" and search for "Reablocks Figma Plugin"
 - Once found, click on run plugin, it will open a popup
-- Click on "Generate CSS"
-- Click on "Copy CSS"
-- Use the copied CSS tokens to your project
+- Click on "Generate Tokens"
+- Click on "Copy Tokens"
+- Use the copied tokens to your project
 
 ## Development guide
 
