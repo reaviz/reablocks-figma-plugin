@@ -14,7 +14,7 @@ interface CSSJson {
 }
 
 export default function () {
-  function generateColors(): CSSJson {
+  async function generateColors() {
     let colorJson: { [k: string]: any } = {};
     /*
     Examples:
@@ -24,18 +24,18 @@ export default function () {
     {name: 'Wireframe Mode', modeId: '1282:1'}
     */
 
-    const collections = figma.variables.getLocalVariableCollections();
+    const collections = await figma.variables.getLocalVariableCollectionsAsync();
     console.log('collections', collections);
 
-    const modes = collections.reduce((cur, col) => {
-      const res = { ...cur };
+    const modes: any = collections.reduce((cur, col) => {
+      const res: any = { ...cur };
       for (const mode of col.modes) {
         res[mode.modeId] = mode.name;
       }
       return res;
     }, {});
 
-    const tokens = figma.variables.getLocalVariables();
+    const tokens = await figma.variables.getLocalVariablesAsync();
     console.log('styles', tokens);
 
     for (const token of tokens) {
@@ -86,8 +86,9 @@ export default function () {
    * Msg handlers
    */
   on('GENERATE_CSS', () => {
-    const colorsObj = generateColors();
-    emit('SUCCESS', { value: colorsObj });
+    generateColors().then(colorsObj => {
+      emit('SUCCESS', { value: colorsObj });
+    })
   });
 
   showUI({ height: 500, width: 400 });

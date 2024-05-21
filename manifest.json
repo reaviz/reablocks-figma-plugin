@@ -3,8 +3,14 @@
   "editorType": [
     "figma"
   ],
-  "id": "reablocks-figma-plugin",
+  "id": "1374829984949878779",
   "name": "Reablocks Figma Plugin",
   "main": "build/main.js",
-  "ui": "build/ui.js"
+  "ui": "build/ui.js",
+  "documentAccess": "dynamic-page",
+  "networkAccess": {
+    "allowedDomains": [
+      "none"
+    ]
+  }
 }

@@ -25,13 +25,14 @@
     "typescript": "^5.4.5"
   },
   "scripts": {
-    "build": "build-figma-plugin --typecheck --minify",
+    "build": "build-figma-plugin --typecheck",
     "watch": "build-figma-plugin --typecheck --watch"
   },
   "figma-plugin": {
     "editorType": [
       "figma"
     ],
+    "documentAccess": "dynamic-page",
     "id": "reablocks-figma-plugin",
     "name": "Reablocks Figma Plugin",
     "main": "src/main.ts",
