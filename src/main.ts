@@ -15,7 +15,8 @@ interface CSSJson {
 
 export default function () {
   async function generateColors() {
-    let colorJson: { [k: string]: any } = {};
+    let colorPalette: { [k: string]: any } = {};
+    let themeTokens: { [k: string]: any } = {};
     /*
     Examples:
     {name: 'Mode 1', modeId: '390:0'}
@@ -24,7 +25,8 @@ export default function () {
     {name: 'Wireframe Mode', modeId: '1282:1'}
     */
 
-    const collections = await figma.variables.getLocalVariableCollectionsAsync();
+    const collections =
+      await figma.variables.getLocalVariableCollectionsAsync();
     console.log('collections', collections);
 
     const modes: any = collections.reduce((cur, col) => {
@@ -42,43 +44,118 @@ export default function () {
       if (token.resolvedType === 'COLOR') {
         const modeIds = Object.keys(token.valuesByMode);
         for (const modeId of modeIds) {
-          // Get the token color
-          const { r, g, b } = token.valuesByMode[modeId] as any;
-          const hex = chroma.rgb(r * 255, g * 255, b * 255).hex();
-
           // tease out primary and secondary labels
           let [primaryLabel, secondaryLabel] = token.name
             .split('/')
             .map((part) => part.trim().toLowerCase());
 
           // trim start of label like 'primary 100' to just '100'
-          secondaryLabel = secondaryLabel.replace(primaryLabel, '').trim().toString();
-          if (secondaryLabel[0] === '-') {
-            secondaryLabel = secondaryLabel.substring(1);
+          if (secondaryLabel) {
+            secondaryLabel = secondaryLabel
+              .replace(primaryLabel, '')
+              .trim()
+              .toString();
+            if (secondaryLabel[0] === '-') {
+              secondaryLabel = secondaryLabel.substring(1);
+            }
           }
 
           // set default objects
           const modeName = modes[modeId];
-          if (colorJson[modeName] === undefined) {
-            colorJson[modeName] = {};
-          }
+          if (modeName === 'Wireframe Mode') {
+            // skip - no need to export wireframe colors
+          } else if (modeName === 'Mode 1') {
+            // Handle color palette tokens
 
-          if (colorJson[modeName][primaryLabel] === undefined) {
-            colorJson[modeName][primaryLabel] = {};
-          }
+            const { r, g, b, a } = token.valuesByMode[modeId] as any;
+            const hex = chroma
+              .rgb(r * 255, g * 255, b * 255)
+              .alpha(a ?? 1)
+              .hex();
 
-          if (colorJson[modeName][primaryLabel][secondaryLabel] === undefined) {
-            colorJson[modeName][primaryLabel][secondaryLabel] = {};
-          }
+            // for color palette, keep at the root level - shared by both light and dark modes
+            if (colorPalette[primaryLabel] === undefined) {
+              colorPalette[primaryLabel] = {};
+            }
 
-          // Add color to json
-          colorJson[modeName][primaryLabel][secondaryLabel] = hex;
+            // replace instances of opacity to match Tailwind conventions
+            // ie, primary['500-40'] => priamry['500/40']
+            secondaryLabel = secondaryLabel?.replace('-', '/');
+            if (
+              secondaryLabel &&
+              colorPalette[primaryLabel][secondaryLabel] === undefined
+            ) {
+              colorPalette[primaryLabel][secondaryLabel] = {};
+            }
+
+            // Add color to json
+            if (secondaryLabel) {
+              colorPalette[primaryLabel][secondaryLabel] = hex;
+            } else {
+              colorPalette[primaryLabel] = hex;
+            }
+          } else {
+            // Handle theme tokens
+
+            // grab the theme - most likely `dark` or `light`
+            const theme = modeName.split(' ')[0].toLowerCase();
+
+            // get the color variable alias name
+            const aliasVariable = await figma.variables.getVariableByIdAsync(
+              token.valuesByMode[modeId].id
+            );
+
+            let aliasName = '';
+            if (aliasVariable!.name.includes('/')) {
+              const [color, scale] = aliasVariable!.name
+                .split('/')[1]
+                .split(' ')
+                .map((part) => part.trim().toLowerCase());
+
+              // if the scale includes opacity, update the format to match Tailwind conventions
+              // ie, ['500-40'] => ['500/40']
+              const colorScale = `[${
+                scale?.includes('-')
+                  ? `'${scale.replace('-', '/')}'`
+                  : scale.replace('-', '/')
+              }]`;
+              aliasName = `colorPalette.${color}${colorScale}`;
+            } else {
+              // for name such as Black or White
+              aliasName = `colorPalette.${aliasVariable!.name.toLowerCase()}`;
+            }
+
+            // set default objects
+            if (themeTokens[theme] === undefined) {
+              themeTokens[theme] = {};
+            }
+
+            if (themeTokens[theme][primaryLabel] === undefined) {
+              themeTokens[theme][primaryLabel] = {};
+            }
+
+            if (
+              themeTokens[theme][primaryLabel][secondaryLabel] === undefined
+            ) {
+              themeTokens[theme][primaryLabel][secondaryLabel] = {};
+            }
+
+            // Add color to json
+            themeTokens[theme][primaryLabel][secondaryLabel] = aliasName;
+
+            // to keep with existing DEFAULT, active, hover, etc structure, set a DEFAULT value
+            // that is the same as active
+            if (secondaryLabel === 'active') {
+              themeTokens[theme][primaryLabel]['DEFAULT'] = aliasName;
+            }
+          }
         }
       }
     }
 
     return {
-      'colors': colorJson
+      colors: colorPalette,
+      themes: themeTokens
     };
   }
 
@@ -86,9 +163,9 @@ export default function () {
    * Msg handlers
    */
   on('GENERATE_CSS', () => {
-    generateColors().then(colorsObj => {
+    generateColors().then((colorsObj) => {
       emit('SUCCESS', { value: colorsObj });
-    })
+    });
   });
 
   showUI({ height: 500, width: 400 });
