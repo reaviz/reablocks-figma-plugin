@@ -102,7 +102,7 @@ export default function () {
 
             // get the color variable alias name
             const aliasVariable = await figma.variables.getVariableByIdAsync(
-              token.valuesByMode[modeId].id
+              (token.valuesByMode[modeId] as any).id
             );
 
             let aliasName = '';
