@@ -24,8 +24,10 @@ Plugin utilities to super charge your dev work for [reablocks](https://github.co
 - Search for new plugins using "Find More plugins option" and search for "Reablocks Figma Plugin"
 - Once found, click on run plugin, it will open a popup
 - Click on "Generate Tokens"
-- Click on "Copy Tokens"
-- Use the copied tokens to your project
+- Click on "Copy Colors" to grab all of color tokens
+- Use the copied tokens in your project's color palette
+- Click on "Copy Themes" to grab all of your design tokens for your theme
+- Use the copied tokens in your project's theme
 
 ## Development guide
 
