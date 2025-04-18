@@ -1,5 +1,6 @@
 import { emit, on, showUI } from '@create-figma-plugin/utilities';
 import chroma from 'chroma-js';
+import merge from 'lodash.merge';
 
 interface ColorTokenInfo {
   primaryLabel: string;
@@ -16,7 +17,7 @@ interface CSSJson {
 export default function () {
   async function generateColors() {
     let colorPalette: { [k: string]: any } = {};
-    let themeTokens: { [k: string]: any } = {};
+    let unifyTokens: { [k: string]: any } = {};
     /*
     Examples:
     {name: 'Mode 1', modeId: '390:0'}
@@ -27,9 +28,18 @@ export default function () {
 
     const collections =
       await figma.variables.getLocalVariableCollectionsAsync();
-    console.log('collections', collections);
+
+    // we only care about Component level tokens
+    const componentTokenCollectionId = collections.find(
+      (col) => col.name === 'Lvl 04 - Component',
+    )?.id;
 
     const modes: any = collections.reduce((cur, col) => {
+      if (
+        ['Lvl 03 (B) - Typography', 'Lvl 03 (C) - Dimension'].includes(col.name)
+      ) {
+        return cur;
+      }
       const res: any = { ...cur };
       for (const mode of col.modes) {
         res[mode.modeId] = mode.name;
@@ -38,16 +48,19 @@ export default function () {
     }, {});
 
     const tokens = await figma.variables.getLocalVariablesAsync();
-    console.log('styles', tokens);
 
     for (const token of tokens) {
       if (token.resolvedType === 'COLOR') {
         const modeIds = Object.keys(token.valuesByMode);
         for (const modeId of modeIds) {
           // tease out primary and secondary labels
-          let [primaryLabel, secondaryLabel] = token.name
+          let [rawSecondaryLabel, rawPrimaryLabel] = token.name
             .split('/')
-            .map((part) => part.trim().toLowerCase());
+            .map((part) => part.trim().toLowerCase())
+            .reverse();
+
+          const primaryLabel = sanitizeName(rawPrimaryLabel);
+          let secondaryLabel = sanitizeName(rawSecondaryLabel);
 
           // trim start of label like 'primary 100' to just '100'
           if (secondaryLabel) {
@@ -66,7 +79,6 @@ export default function () {
             // skip - no need to export wireframe colors
           } else if (modeName === 'Mode 1') {
             // Handle color palette tokens
-
             const { r, g, b, a } = token.valuesByMode[modeId] as any;
             const hex = chroma
               .rgb(r * 255, g * 255, b * 255)
@@ -78,84 +90,95 @@ export default function () {
               colorPalette[primaryLabel] = {};
             }
 
-            // replace instances of opacity to match Tailwind conventions
-            // ie, primary['500-40'] => priamry['500/40']
-            secondaryLabel = secondaryLabel?.replace('-', '/');
-            if (
-              secondaryLabel &&
-              colorPalette[primaryLabel][secondaryLabel] === undefined
-            ) {
-              colorPalette[primaryLabel][secondaryLabel] = {};
-            }
-
             // Add color to json
             if (secondaryLabel) {
               colorPalette[primaryLabel][secondaryLabel] = hex;
             } else {
               colorPalette[primaryLabel] = hex;
             }
+          } else if (
+            token.variableCollectionId !== componentTokenCollectionId
+          ) {
+            // skip - only pull tokens from Component level tokens
+            // the other levels are passthroughs used only for design purposes
           } else {
             // Handle theme tokens
-
-            // grab the theme - most likely `dark` or `light`
-            const theme = modeName.split(' ')[0].toLowerCase();
-
-            // get the color variable alias name
-            const aliasVariable = await figma.variables.getVariableByIdAsync(
-              (token.valuesByMode[modeId] as any).id
+            console.log('modeName', modeName);
+            // Get the color variable alias name
+            let aliasVariable = await figma.variables.getVariableByIdAsync(
+              (token.valuesByMode[modeId] as any).id,
             );
 
-            let aliasName = '';
-            if (aliasVariable!.name.includes('/')) {
-              const [color, scale] = aliasVariable!.name
-                .split('/')[1]
-                .split(' ')
-                .map((part) => part.trim().toLowerCase());
+            let aliasValue = '';
+            if (!aliasVariable || aliasVariable.resolvedType !== 'COLOR') {
+              // ignore anything that's not a color
+              console.log('aliasVariable', aliasVariable);
+            } else if (aliasVariable.name.includes('/')) {
+              // continue to resolve alias until we get to the base color
+              let firstKey = Object.keys(aliasVariable.valuesByMode)[0];
+              while (
+                (aliasVariable && (aliasVariable.valuesByMode[firstKey] as any))
+                  .type === 'VARIABLE_ALIAS'
+              ) {
+                const aliasId = (aliasVariable!.valuesByMode[firstKey] as any)
+                  .id;
+                aliasVariable = await figma.variables.getVariableByIdAsync(
+                  aliasId,
+                );
+                firstKey = Object.keys(aliasVariable!.valuesByMode)[0];
+              }
 
-              // if the scale includes opacity, update the format to match Tailwind conventions
-              // ie, ['500-40'] => ['500/40']
-              const colorScale = `[${
-                scale?.includes('-')
-                  ? `'${scale.replace('-', '/')}'`
-                  : scale.replace('-', '/')
-              }]`;
-              aliasName = `colorPalette.${color}${colorScale}`;
-            } else {
-              // for name such as Black or White
-              aliasName = `colorPalette.${aliasVariable!.name.toLowerCase()}`;
+              // construct the base color value
+              const [scale, color] = aliasVariable!.name
+                .split('/')
+                .map((part) => part.trim().toLowerCase())
+                .reverse();
+              aliasValue = `colorPalette['${sanitizeName(color)}']['${scale}']`;
             }
 
-            // set default objects
-            if (themeTokens[theme] === undefined) {
-              themeTokens[theme] = {};
-            }
+            // Pull the full token name and splits it into an array and  to be used to
+            // generate the token structure.
+            // Note: it remove the "Colors" level as it's not needed in the token structure
+            const tokenArray = token.name
+              .replace('/Colors', '')
+              .split('/')
+              .map((part) => part.trim().toLowerCase());
 
-            if (themeTokens[theme][primaryLabel] === undefined) {
-              themeTokens[theme][primaryLabel] = {};
-            }
+            tokenArray.unshift(modeName);
 
-            if (
-              themeTokens[theme][primaryLabel][secondaryLabel] === undefined
-            ) {
-              themeTokens[theme][primaryLabel][secondaryLabel] = {};
-            }
+            // Generate the token structure - generally, should follow something like this:
+            // {
+            //   component: {
+            //     type: {
+            //       variant: {
+            //         property: {
+            //           modifier: { <-- modifier may or may not be present
+            //             state: tokenValue
+            //           }
+            //         }
+            //       }
+            //     }
+            //   }
+            // }
+            // @ts-expect-error - this is a bit of a hack to get the type inference to work
+            const componentToken = tokenArray.reduceRight((acc, key) => {
+              const sanitizedKey = sanitizeName(key);
+              return { [sanitizedKey]: acc };
+            }, aliasValue);
+            console.log('componentToken', componentToken);
 
-            // Add color to json
-            themeTokens[theme][primaryLabel][secondaryLabel] = aliasName;
-
-            // to keep with existing DEFAULT, active, hover, etc structure, set a DEFAULT value
-            // that is the same as active
-            if (secondaryLabel === 'active') {
-              themeTokens[theme][primaryLabel]['DEFAULT'] = aliasName;
-            }
+            // Merge the component token into the rest of the tokens
+            merge(unifyTokens, componentToken);
           }
         }
+      } else {
+        // console.log('token', token.name, token.resolvedType);
       }
     }
 
     return {
       colors: colorPalette,
-      themes: themeTokens
+      tokens: unifyTokens,
     };
   }
 
@@ -169,4 +192,15 @@ export default function () {
   });
 
   showUI({ height: 500, width: 400 });
+}
+
+/**
+ * Remove any non-alphanumeric characters and replaces spaces with a dash
+ */
+function sanitizeName(name: string) {
+  if (!name) return name;
+  return name
+    .replace(/[^a-zA-Z0-9\- ]/g, '') // remove non-alphanumeric characters
+    .replace(/  /g, ' ') // replace double spaces with a single space
+    .replace(/ /g, '-'); // replace spaces with a dash
 }

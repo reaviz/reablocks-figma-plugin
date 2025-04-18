@@ -5,18 +5,18 @@ import {
   Columns,
   Container,
   render,
-  VerticalSpace,
-  TextboxMultiline
+  TextboxMultiline,
+  VerticalSpace
 } from '@create-figma-plugin/ui';
 import { emit, once } from '@create-figma-plugin/utilities';
-import { h } from 'preact';
-import { useCallback, useState, useEffect } from 'preact/hooks';
-import styles from './styles.css';
 import copy from 'copy-to-clipboard';
+import { h } from 'preact';
+import { useCallback, useEffect, useState } from 'preact/hooks';
+import styles from './styles.css';
 
 function Plugin() {
-  const [colorPalette, setColorPalette] = useState(`Click on Generate CSS!`);
-  const [themeTokens, setThemeTokens] = useState(`Click on Generate CSS!`);
+  const [colorPalette, setColorPalette] = useState(`Click on Generate Tokens!`);
+  const [themeTokens, setThemeTokens] = useState(`Click on Generate Tokens!`);
 
   const generateCSSButtonClick = useCallback(function (): void {
     emit('GENERATE_CSS');
@@ -24,13 +24,13 @@ function Plugin() {
 
   useEffect(() => {
     once('SUCCESS', (args) => {
-      const { colors, themes } = args.value;
+      const { colors, tokens } = args.value;
       setColorPalette(JSON.stringify(colors, null, 2));
 
       // remove quotes from all colorPalette aliases
       // ie, "colorPalette.blue[500]" =>  colorPalette.blue[500]
       const regex = /"colorPalette\.(.+)"/g;
-      const formatted = JSON.stringify(themes, null, 2).replace(
+      const formatted = JSON.stringify(tokens, null, 2).replace(
         regex,
         (match) => match.replace(/"/g, '')
       );
@@ -58,7 +58,7 @@ function Plugin() {
         />
       </div>
       <VerticalSpace space="extraSmall" />
-      Themes:
+      ComponentTokens:
       <div class={styles.container}>
         <TextboxMultiline
           rows={10}
@@ -76,7 +76,7 @@ function Plugin() {
           Copy Colors
         </Button>
         <Button fullWidth onClick={copyThemeTokens}>
-          Copy Themes
+          Copy Tokens
         </Button>
       </Columns>
       <VerticalSpace space="small" />
