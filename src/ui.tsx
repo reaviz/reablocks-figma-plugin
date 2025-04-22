@@ -95,7 +95,7 @@ function Plugin() {
   return (
     <Container space="large">
       <VerticalSpace space="small" />
-      Theme:
+      Mode:
       <VerticalSpace space="extraSmall" />
       <Dropdown
         placeholder="Select Mode"
