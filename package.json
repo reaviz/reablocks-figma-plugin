@@ -6,8 +6,9 @@
   "version": "1.0.0",
   "description": "A Figma plugin to generate CSS tokens for reablocks.",
   "dependencies": {
-    "@create-figma-plugin/ui": "^3.2.0",
-    "@create-figma-plugin/utilities": "^3.2.0",
+    "@create-figma-plugin/ui": "^4.0.0",
+    "@create-figma-plugin/utilities": "^4.0.0",
+    "change-case": "^5.4.4",
     "chroma-js": "^2.4.2",
     "copy-to-clipboard": "^3.3.3",
     "preact": "^10.22.0",
@@ -15,9 +16,9 @@
     "react-simple-code-editor": "^0.13.1"
   },
   "devDependencies": {
-    "@create-figma-plugin/build": "^3.2.0",
-    "@create-figma-plugin/tsconfig": "^3.2.0",
-    "@figma/plugin-typings": "^1.93.0",
+    "@create-figma-plugin/build": "^4.0.0",
+    "@create-figma-plugin/tsconfig": "^4.0.0",
+    "@figma/plugin-typings": "^1.110.0",
     "@types/chroma-js": "^2.4.4",
     "@types/prismjs": "^1.26.4",
     "@types/react": "^18.3.2",
@@ -30,7 +31,11 @@
   },
   "figma-plugin": {
     "editorType": [
-      "figma"
+      "figma",
+      "dev"
+    ],
+    "capabilities": [
+      "inspect"
     ],
     "documentAccess": "dynamic-page",
     "id": "reablocks-figma-plugin",

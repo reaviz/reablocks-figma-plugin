@@ -1,171 +1,121 @@
 import { emit, on, showUI } from '@create-figma-plugin/utilities';
+import { kebabCase } from 'change-case';
 import chroma from 'chroma-js';
 
-interface ColorTokenInfo {
-  primaryLabel: string;
-  secondaryLabel: string;
-  fullName: string;
-  opacity: number | undefined;
-  hex: string;
-}
-
-interface CSSJson {
-  colors: { [k: string]: any };
-}
+const COLORS_COLLECTION_NAME = 'Lvl 01 - Root'
+const MODE_COLLECTION_NAME = 'Lvl 03 (A) - Mode'
+const COMPONENTS_COLLECTION_NAME = 'Lvl 04 - Component'
 
 export default function () {
-  async function generateColors() {
-    let colorPalette: { [k: string]: any } = {};
-    let themeTokens: { [k: string]: any } = {};
-    /*
-    Examples:
-    {name: 'Mode 1', modeId: '390:0'}
-    {name: 'Light Mode', modeId: '60:0'}
-    {name: 'Dark Mode', modeId: '390:1'}
-    {name: 'Wireframe Mode', modeId: '1282:1'}
-    */
+  const getNestedVariable = async (id: string, collectionName: string, mode?: string): Promise<Variable | null> => {
+    const variable = await figma.variables.getVariableByIdAsync(id);
+    const collection = await figma.variables.getVariableCollectionByIdAsync(variable?.variableCollectionId as string);
+    const firstValueMode = Object.keys(variable?.valuesByMode ?? [])?.[0];
 
-    const collections =
-      await figma.variables.getLocalVariableCollectionsAsync();
-    console.log('collections', collections);
+    if (collection?.name === collectionName) {
+      return variable;
+    } else {
+      return getNestedVariable((variable?.valuesByMode[mode || firstValueMode] as VariableAlias).id, collectionName);
+    }
+  }
 
-    const modes: any = collections.reduce((cur, col) => {
-      const res: any = { ...cur };
-      for (const mode of col.modes) {
-        res[mode.modeId] = mode.name;
+  on('LOAD_MODES', async () => {
+    const collections = await figma.variables.getLocalVariableCollectionsAsync();
+    const modes = collections.reduce((cur, col) => {
+      if (col.name !== MODE_COLLECTION_NAME) {
+        return cur;
       }
-      return res;
-    }, {});
 
-    const tokens = await figma.variables.getLocalVariablesAsync();
-    console.log('styles', tokens);
+      for (const mode of col.modes) {
+        cur = {...cur, [mode.modeId]:  mode.name};
+      }
+      return cur;
+    }, {} as Record<string, string>);
 
-    for (const token of tokens) {
-      if (token.resolvedType === 'COLOR') {
-        const modeIds = Object.keys(token.valuesByMode);
-        for (const modeId of modeIds) {
-          // tease out primary and secondary labels
-          let [primaryLabel, secondaryLabel] = token.name
-            .split('/')
-            .map((part) => part.trim().toLowerCase());
+    emit('LOADED_MODES', { modes });
+  });
 
-          // trim start of label like 'primary 100' to just '100'
-          if (secondaryLabel) {
-            secondaryLabel = secondaryLabel
-              .replace(primaryLabel, '')
-              .trim()
-              .toString();
-            if (secondaryLabel[0] === '-') {
-              secondaryLabel = secondaryLabel.substring(1);
-            }
-          }
+  on('GENERATE_COLOR_VARIABLES', async () => {
+    const tokens = [];
+    const collections = await figma.variables.getLocalVariableCollectionsAsync();
+    const colorsCollection = collections.filter(({ name }) => name === COLORS_COLLECTION_NAME)?.[0];
+    const mode = colorsCollection?.modes?.[0]?.modeId; // Only one mode is supported for Root level
 
-          // set default objects
-          const modeName = modes[modeId];
-          if (modeName === 'Wireframe Mode') {
-            // skip - no need to export wireframe colors
-          } else if (modeName === 'Mode 1') {
-            // Handle color palette tokens
+    for (const variableId of colorsCollection?.variableIds || []) {
+      const variable = await figma.variables.getVariableByIdAsync(variableId);
 
-            const { r, g, b, a } = token.valuesByMode[modeId] as any;
-            const hex = chroma
-              .rgb(r * 255, g * 255, b * 255)
-              .alpha(a ?? 1)
-              .hex();
+      // Only colors need to be exported
+      if (variable?.resolvedType === 'COLOR') {
+        const name = kebabCase(variable?.name);
+        const value = variable?.valuesByMode[mode];
+        const { r, g, b, a } = value as any;
+        const hex = chroma
+          .rgb(r * 255, g * 255, b * 255)
+          .alpha(a ?? 1)
+          .hex();
 
-            // for color palette, keep at the root level - shared by both light and dark modes
-            if (colorPalette[primaryLabel] === undefined) {
-              colorPalette[primaryLabel] = {};
-            }
+        tokens.push({
+          token: name,
+          value: hex,
+        });
+      }
+    }
+    emit('GENERATED_COLOR_VARIABLES', { tokens });
+  });
 
-            // replace instances of opacity to match Tailwind conventions
-            // ie, primary['500-40'] => priamry['500/40']
-            secondaryLabel = secondaryLabel?.replace('-', '/');
-            if (
-              secondaryLabel &&
-              colorPalette[primaryLabel][secondaryLabel] === undefined
-            ) {
-              colorPalette[primaryLabel][secondaryLabel] = {};
-            }
+  on('GENERATE_MODE_VARIABLES', async ({ mode }) => {
+    const tokens = [];
+    const collections = await figma.variables.getLocalVariableCollectionsAsync();
+    const modesCollection = collections.filter(({ name }) => name === MODE_COLLECTION_NAME)?.[0];
 
-            // Add color to json
-            if (secondaryLabel) {
-              colorPalette[primaryLabel][secondaryLabel] = hex;
-            } else {
-              colorPalette[primaryLabel] = hex;
-            }
-          } else {
-            // Handle theme tokens
+    for (const variableId of modesCollection?.variableIds || []) {
+      const variable = await figma.variables.getVariableByIdAsync(variableId);
 
-            // grab the theme - most likely `dark` or `light`
-            const theme = modeName.split(' ')[0].toLowerCase();
+      // Only colors need to be exported
+      if (variable?.resolvedType === 'COLOR') {
+        const name = kebabCase(variable?.name);
+        const value = variable.valuesByMode[mode]
 
-            // get the color variable alias name
-            const aliasVariable = await figma.variables.getVariableByIdAsync(
-              (token.valuesByMode[modeId] as any).id
-            );
+        if ((value as VariableAlias)?.type === 'VARIABLE_ALIAS') {
+          const targetVariable = await getNestedVariable((value as VariableAlias)?.id, COLORS_COLLECTION_NAME);
 
-            let aliasName = '';
-            if (aliasVariable!.name.includes('/')) {
-              const [color, scale] = aliasVariable!.name
-                .split('/')[1]
-                .split(' ')
-                .map((part) => part.trim().toLowerCase());
-
-              // if the scale includes opacity, update the format to match Tailwind conventions
-              // ie, ['500-40'] => ['500/40']
-              const colorScale = `[${
-                scale?.includes('-')
-                  ? `'${scale.replace('-', '/')}'`
-                  : scale.replace('-', '/')
-              }]`;
-              aliasName = `colorPalette.${color}${colorScale}`;
-            } else {
-              // for name such as Black or White
-              aliasName = `colorPalette.${aliasVariable!.name.toLowerCase()}`;
-            }
-
-            // set default objects
-            if (themeTokens[theme] === undefined) {
-              themeTokens[theme] = {};
-            }
-
-            if (themeTokens[theme][primaryLabel] === undefined) {
-              themeTokens[theme][primaryLabel] = {};
-            }
-
-            if (
-              themeTokens[theme][primaryLabel][secondaryLabel] === undefined
-            ) {
-              themeTokens[theme][primaryLabel][secondaryLabel] = {};
-            }
-
-            // Add color to json
-            themeTokens[theme][primaryLabel][secondaryLabel] = aliasName;
-
-            // to keep with existing DEFAULT, active, hover, etc structure, set a DEFAULT value
-            // that is the same as active
-            if (secondaryLabel === 'active') {
-              themeTokens[theme][primaryLabel]['DEFAULT'] = aliasName;
-            }
-          }
+          tokens.push({
+            token: name,
+            value: kebabCase(targetVariable?.name ?? ''),
+          })
         }
       }
     }
 
-    return {
-      colors: colorPalette,
-      themes: themeTokens
-    };
-  }
+    emit('GENERATED_MODE_VARIABLES', { tokens });
+  });
 
-  /**
-   * Msg handlers
-   */
-  on('GENERATE_CSS', () => {
-    generateColors().then((colorsObj) => {
-      emit('SUCCESS', { value: colorsObj });
-    });
+  on('GENERATE_COMPONENT_VARIABLES', async () => {
+    const tokens = [];
+    const collections = await figma.variables.getLocalVariableCollectionsAsync();
+    const modesCollection = collections.filter(({ name }) => name === COMPONENTS_COLLECTION_NAME)?.[0];
+    const mode = modesCollection?.modes?.[0]?.modeId;
+
+    for (const variableId of modesCollection?.variableIds || []) {
+      const variable = await figma.variables.getVariableByIdAsync(variableId);
+
+      // Only colors need to be exported
+      if (variable?.resolvedType === 'COLOR') {
+        const name = kebabCase(variable?.name);
+        const value = variable.valuesByMode[mode]
+
+        if ((value as VariableAlias)?.type === 'VARIABLE_ALIAS') {
+          const targetVariable = await getNestedVariable((value as VariableAlias)?.id, MODE_COLLECTION_NAME);
+
+          tokens.push({
+            token: name,
+            value: kebabCase(targetVariable?.name ?? ''),
+          })
+        }
+      }
+    }
+
+    emit('GENERATED_COMPONENT_VARIABLES', { tokens });
   });
 
   showUI({ height: 500, width: 400 });

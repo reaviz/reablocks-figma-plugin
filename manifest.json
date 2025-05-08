@@ -1,12 +1,16 @@
 {
   "api": "1.0.0",
   "editorType": [
-    "figma"
+    "figma",
+    "dev"
   ],
   "id": "1374829984949878779",
   "name": "Reablocks Figma Plugin",
   "main": "build/main.js",
   "ui": "build/ui.js",
+  "capabilities": [
+    "inspect"
+  ],
   "documentAccess": "dynamic-page",
   "networkAccess": {
     "allowedDomains": [
