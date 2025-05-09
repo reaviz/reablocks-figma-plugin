@@ -1,6 +1,6 @@
 # Reablocks Figma Plugin
 
-![screenshot](screenshot.png)
+![screenshot](screenshot-plugin.png)
 
 Plugin utilities to super charge your dev work for [reablocks](https://github.com/reaviz/reablocks)
 
