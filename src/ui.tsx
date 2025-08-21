@@ -61,11 +61,11 @@ function Plugin() {
     setTimeout(() => setComponentCopyButtonText(COPY_TITLE), 2000);
   }, [componentVariables]);
 
-  const copyTypography = useCallback(() => {
+  const copyOther = useCallback(() => {
     copy(otherVariables);
     setOtherCopyButtonText(COPIED_TITLE);
     setTimeout(() => setOtherCopyButtonText(COPY_TITLE), 2000);
-  }, [componentVariables]);
+  }, [otherVariables]);
 
   useEffect(() => {
     emit('LOAD_MODES');
@@ -217,7 +217,7 @@ function Plugin() {
           otherVariables === GENERATING_TITLE ||
           otherCopyButtonText === COPIED_TITLE
         }
-        onClick={copyTypography}
+        onClick={copyOther}
       >
         {otherCopyButtonText}
       </Button>
