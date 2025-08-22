@@ -22,20 +22,25 @@ function Plugin() {
   const [colorVariables, setColorVariables] = useState('');
   const [modeVariables, setModeVariables] = useState('');
   const [componentVariables, setComponentVariables] = useState('');
+  const [otherVariables, setOtherVariables] = useState('');
   const [modes, setModes] = useState<Record<string, string>>({});
   const [selectedMode, setSelectedMode] = useState<string | null>(null);
   const [colorsCopyButtonText, setColorsCopyButtonText] = useState(COPY_TITLE);
   const [modeCopyButtonText, setModeCopyButtonText] = useState(COPY_TITLE);
   const [componentCopyButtonText, setComponentCopyButtonText] =
     useState(COPY_TITLE);
+  const [otherCopyButtonText, setOtherCopyButtonText] =
+    useState(COPY_TITLE);
 
   const generateVariablesHandler = useCallback(() => {
     setColorVariables(GENERATING_TITLE);
     setModeVariables(GENERATING_TITLE);
     setComponentVariables(GENERATING_TITLE);
+    setOtherVariables(GENERATING_TITLE);
     emit('GENERATE_COLOR_VARIABLES');
     emit('GENERATE_MODE_VARIABLES', { mode: selectedMode });
     emit('GENERATE_COMPONENT_VARIABLES');
+    emit('GENERATE_OTHER_VARIABLES');
   }, [selectedMode]);
 
   const copyColors = useCallback(() => {
@@ -55,6 +60,12 @@ function Plugin() {
     setComponentCopyButtonText(COPIED_TITLE);
     setTimeout(() => setComponentCopyButtonText(COPY_TITLE), 2000);
   }, [componentVariables]);
+
+  const copyOther = useCallback(() => {
+    copy(otherVariables);
+    setOtherCopyButtonText(COPIED_TITLE);
+    setTimeout(() => setOtherCopyButtonText(COPY_TITLE), 2000);
+  }, [otherVariables]);
 
   useEffect(() => {
     emit('LOAD_MODES');
@@ -86,6 +97,22 @@ function Plugin() {
         setComponentVariables(
           tokens
             .map(({ token, value }) => `--color-${token}: var(--${value});`)
+            .join(`\n`),
+        );
+      },
+    );
+    on(
+      'GENERATED_OTHER_VARIABLES',
+      ({ tokens }: { tokens: ({ token: string; value: string } | string)[] }) => {
+        setOtherVariables(
+          tokens
+            .map((val) => {
+              if (typeof val === 'string') {
+                return val;
+              } else {
+                return`--${val.token}: ${val.value};`
+              }
+            })
             .join(`\n`),
         );
       },
@@ -153,7 +180,7 @@ function Plugin() {
         {modeCopyButtonText}
       </Button>
       <VerticalSpace space="large" />
-      Component variables:
+        Component variables:
       <VerticalSpace space="extraSmall" />
       <div class={styles.container}>
         <TextboxMultiline
@@ -172,6 +199,27 @@ function Plugin() {
         onClick={copyTokens}
       >
         {componentCopyButtonText}
+      </Button>
+      <VerticalSpace space="large" />
+        Other variables:
+      <VerticalSpace space="extraSmall" />
+      <div class={styles.container}>
+        <TextboxMultiline
+          rows={10}
+          placeholder="Click on Generate"
+          value={otherVariables}
+        />
+      </div>
+      <VerticalSpace space="small" />
+      <Button
+        disabled={
+          !otherVariables ||
+          otherVariables === GENERATING_TITLE ||
+          otherCopyButtonText === COPIED_TITLE
+        }
+        onClick={copyOther}
+      >
+        {otherCopyButtonText}
       </Button>
       <VerticalSpace space="small" />
     </Container>
