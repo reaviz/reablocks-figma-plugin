@@ -37,7 +37,7 @@ function Plugin() {
     setModeVariables(GENERATING_TITLE);
     setComponentVariables(GENERATING_TITLE);
     setOtherVariables(GENERATING_TITLE);
-    emit('GENERATE_COLOR_VARIABLES');
+    emit('GENERATE_ROOT_VARIABLES');
     emit('GENERATE_MODE_VARIABLES', { mode: selectedMode });
     emit('GENERATE_COMPONENT_VARIABLES');
     emit('GENERATE_OTHER_VARIABLES');
@@ -74,10 +74,17 @@ function Plugin() {
       setSelectedMode(Object.keys(modes)?.[0]);
     });
     on(
-      'GENERATED_COLOR_VARIABLES',
+      'GENERATED_ROOT_VARIABLES',
       ({ tokens }: { tokens: { token: string; value: string }[] }) => {
         setColorVariables(
-          tokens.map(({ token, value }) => `--${token}: ${value};`).join(`\n`),
+          tokens.map((val) => {
+            if (typeof val === 'string') {
+              return val;
+            } else {
+              return`--${val.token}: ${val.value};`
+            }
+          })
+          .join(`\n`),
         );
       },
     );
@@ -93,10 +100,16 @@ function Plugin() {
     );
     on(
       'GENERATED_COMPONENT_VARIABLES',
-      ({ tokens }: { tokens: { token: string; value: string }[] }) => {
+      ({ tokens }: { tokens: (string | { token: string; value: string })[] }) => {
         setComponentVariables(
           tokens
-            .map(({ token, value }) => `--color-${token}: var(--${value});`)
+            .map((val) => {
+              if (typeof val === 'string') {
+                return val;
+              } else {
+                return`--${val.token}: ${val.value};`
+              }
+            })
             .join(`\n`),
         );
       },
@@ -138,7 +151,7 @@ function Plugin() {
         Generate
       </Button>
       <VerticalSpace space="large" />
-      Color variables:
+      Root variables:
       <VerticalSpace space="extraSmall" />
       <div class={styles.container}>
         <TextboxMultiline
