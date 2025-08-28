@@ -102,7 +102,7 @@ export default function () {
             firstValueMode
           ] as number;
           tokens.push({
-            token: `${kebabCase(dimensionVariable)}-${name}`,
+            token: `${kebabCase(dimensionVariable)}-${kebabCase(name ?? '')}`,
             value: `${padding}px`,
           });
         }
