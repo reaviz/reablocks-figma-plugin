@@ -3,7 +3,7 @@
   "author": "Good Code, LLC",
   "license": "Apache-2.0",
   "homepage": "https://github.com/reaviz/reablocks-figma-plugin#readme",
-  "version": "1.0.2",
+  "version": "2.0.0",
   "description": "A Figma plugin to generate CSS tokens for reablocks.",
   "keywords": [
     "figma",
