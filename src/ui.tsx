@@ -19,6 +19,7 @@ const COPIED_TITLE = 'Copied!';
 const COPY_TITLE = 'Copy';
 
 function Plugin() {
+  const [modesLoading, setModesLoading] = useState<boolean>(true);
   const [colorVariables, setColorVariables] = useState('');
   const [modeVariables, setModeVariables] = useState('');
   const [componentVariables, setComponentVariables] = useState('');
@@ -70,8 +71,12 @@ function Plugin() {
   useEffect(() => {
     emit('LOAD_MODES');
     once('LOADED_MODES', ({ modes }) => {
+      const mode = Object.keys(modes)?.[0];
       setModes(modes);
-      setSelectedMode(Object.keys(modes)?.[0]);
+      if (mode) {
+        setSelectedMode(Object.keys(modes)?.[0]);
+      }
+      setModesLoading(false);
     });
     on(
       'GENERATED_ROOT_VARIABLES',
@@ -131,6 +136,44 @@ function Plugin() {
       },
     );
   }, [setModes, setSelectedMode]);
+
+  if (modesLoading) {
+    return <div style={{ width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center'}}>
+      <h3>Loading...</h3>
+    </div>
+  }
+
+  if (Object.keys(modes).length === 0) {
+    return (
+      <Container space="large">
+        <VerticalSpace space="small" />
+        <div>
+          <p>
+          <h2>Heads up! 🙌</h2>
+          </p>
+          <p>
+          It looks like this plugin is running outside of the Unify Design System workspace.
+          </p>
+          <p>
+          The Unify Design System provides shared styles, components, and tokens that this plugin depends on to work correctly.
+          </p>
+          <p>
+          To make full use of its features, please open or install the plugin within a Figma file that’s applied with the Unify Design System.
+          </p>
+          <p>
+          You can find setup instructions, access details, and more information here:
+          </p>
+          <p>
+          👉 Learn more at <a target="_blank" href="https://unifydesignsystem.com">unifydesignsystem.com</a>
+          </p>
+          <p>
+          If you’re unsure whether your current Figma file is part of Unify, reach out to your design system admin or check your team’s Unify documentation.
+          </p>
+        </div>
+        <VerticalSpace space="small" />
+      </Container>
+    );
+  }
 
   return (
     <Container space="large">

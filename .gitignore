@@ -8,3 +8,5 @@ dist/
 build/
 code.js
 .DS_Store
+
+.idea
