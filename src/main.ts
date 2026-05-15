@@ -19,301 +19,342 @@ const DIMENSIONS_VARIABLES = [
   'Corner Radius',
 ];
 
-export default function () {
-  const getNestedVariable = async (id: string, collectionName: string, mode?: string): Promise<Variable | null> => {
-    const variable = await figma.variables.getVariableByIdAsync(id);
-    const collection = await figma.variables.getVariableCollectionByIdAsync(variable?.variableCollectionId as string);
-    const firstValueMode = Object.keys(variable?.valuesByMode ?? [])?.[0];
+type Token = { token: string; value: string };
 
-    if (collection?.name === collectionName) {
-      return variable;
-    } else {
-      const value = (variable?.valuesByMode[mode || firstValueMode] as VariableAlias)?.id;
-      return value ? getNestedVariable(value, collectionName) : null;
+function isAlias(value: VariableValue | undefined): value is VariableAlias {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    (value as VariableAlias).type === 'VARIABLE_ALIAS'
+  );
+}
+
+function isRgba(value: VariableValue | undefined): value is RGBA {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    'r' in value &&
+    'g' in value &&
+    'b' in value
+  );
+}
+
+export default function () {
+  const collections: Map<string, VariableCollection> = new Map();
+
+  async function loadCollections() {
+    const all = await figma.variables.getLocalVariableCollectionsAsync();
+    collections.clear();
+    for (const c of all) collections.set(c.name, c);
+    return collections;
+  }
+
+  // Resolve aliases through the user-selected style mode when traversing the Style collection,
+  // otherwise fall back to the collection's defaultModeId (the "Auto" target in Figma).
+  async function resolveAlias(
+    id: string,
+    targetCollectionName: string,
+    styleMode?: string
+  ): Promise<Variable | null> {
+    const variable = await figma.variables.getVariableByIdAsync(id);
+    if (!variable) return null;
+    const collection = await figma.variables.getVariableCollectionByIdAsync(
+      variable.variableCollectionId
+    );
+    if (collection?.name === targetCollectionName) return variable;
+
+    const fallbackMode =
+      collection?.defaultModeId ?? Object.keys(variable.valuesByMode)[0];
+    const resolveMode =
+      collection?.name === STYLE_COLLECTION_NAME && styleMode
+        ? styleMode
+        : fallbackMode;
+
+    const next = variable.valuesByMode[resolveMode];
+    return isAlias(next) ? resolveAlias(next.id, targetCollectionName, styleMode) : null;
+  }
+
+  async function collectRootColors(): Promise<Token[]> {
+    const tokens: Token[] = [];
+    const coll = collections.get(ROOT_COLLECTION_NAME);
+    const mode = coll?.defaultModeId;
+    if (!coll || !mode) return tokens;
+    for (const id of coll.variableIds) {
+      const variable = await figma.variables.getVariableByIdAsync(id);
+      if (variable?.resolvedType !== 'COLOR') continue;
+      const value = variable.valuesByMode[mode];
+      if (!isRgba(value)) continue;
+      const { r, g, b, a } = value;
+      const hex = chroma
+        .rgb(r * 255, g * 255, b * 255)
+        .alpha(a ?? 1)
+        .hex();
+      tokens.push({ token: kebabCase(variable.name), value: hex });
     }
+    return tokens;
+  }
+
+  async function collectRootDimensions(): Promise<Token[]> {
+    const tokens: Token[] = [];
+    const coll = collections.get(DIMENSIONS_COLLECTION_NAME);
+    const mode = coll?.defaultModeId;
+    if (!coll || !mode) return tokens;
+    for (const id of coll.variableIds) {
+      const variable = await figma.variables.getVariableByIdAsync(id);
+      const group = DIMENSIONS_VARIABLES.find((v) =>
+        variable?.name?.startsWith(v)
+      );
+      if (!variable || !group) continue;
+      const leaf = variable.name.split('/').pop()?.toLowerCase() ?? '';
+      const value = variable.valuesByMode[mode];
+      if (!isAlias(value)) continue;
+      const target = await resolveAlias(value.id, ROOT_COLLECTION_NAME);
+      const firstMode = Object.keys(target?.valuesByMode ?? {})[0];
+      const px = target?.valuesByMode?.[firstMode];
+      if (typeof px !== 'number') continue;
+      tokens.push({
+        token: `${kebabCase(group)}-${kebabCase(leaf)}`,
+        value: `${px}px`,
+      });
+    }
+    return tokens;
+  }
+
+  async function collectModeTokens(modeId: string): Promise<Token[]> {
+    const tokens: Token[] = [];
+    const coll = collections.get(MODE_COLLECTION_NAME);
+    if (!coll) return tokens;
+    for (const id of coll.variableIds) {
+      const variable = await figma.variables.getVariableByIdAsync(id);
+      if (variable?.resolvedType !== 'COLOR') continue;
+      const value = variable.valuesByMode[modeId];
+      if (!isAlias(value)) continue;
+      const target = await resolveAlias(value.id, ROOT_COLLECTION_NAME);
+      tokens.push({
+        token: kebabCase(variable.name),
+        value: kebabCase(target?.name ?? ''),
+      });
+    }
+    return tokens;
+  }
+
+  async function collectComponentTokens(): Promise<{
+    colors: Token[];
+    dimensions: Token[];
+  }> {
+    const colors: Token[] = [];
+    const dimensions: Token[] = [];
+    const coll = collections.get(COMPONENTS_COLLECTION_NAME);
+    const mode = coll?.defaultModeId;
+    if (!coll || !mode) return { colors, dimensions };
+
+    const dimensionScopes: VariableScope[] = ['GAP', 'WIDTH_HEIGHT', 'CORNER_RADIUS'];
+
+    for (const id of coll.variableIds) {
+      const variable = await figma.variables.getVariableByIdAsync(id);
+      if (!variable) continue;
+      const value = variable.valuesByMode[mode];
+      if (!isAlias(value)) continue;
+
+      if (variable.resolvedType === 'COLOR') {
+        const target = await resolveAlias(value.id, MODE_COLLECTION_NAME);
+        colors.push({
+          token: kebabCase(variable.name),
+          value: `var(--${kebabCase(target?.name?.toLowerCase() ?? '')})`,
+        });
+      } else if (
+        Array.isArray(variable.scopes) &&
+        dimensionScopes.some((s) => variable.scopes.includes(s))
+      ) {
+        let tokenValue = '';
+        const dimensionVariable = await resolveAlias(
+          value.id,
+          DIMENSIONS_COLLECTION_NAME
+        );
+        if (!dimensionVariable) {
+          const target = await resolveAlias(value.id, ROOT_COLLECTION_NAME);
+          const firstMode = Object.keys(target?.valuesByMode ?? {})[0];
+          const px = target?.valuesByMode?.[firstMode];
+          if (typeof px !== 'number') continue;
+          tokenValue = `${px}px`;
+        } else {
+          tokenValue = `var(--${kebabCase(dimensionVariable.name.toLowerCase())})`;
+        }
+        dimensions.push({ token: kebabCase(variable.name), value: tokenValue });
+      }
+    }
+    return { colors, dimensions };
+  }
+
+  async function collectTypography(stylesMode?: string): Promise<{
+    fontFamilies: Token[];
+    fontSizes: Token[];
+    lineHeights: Token[];
+    blurs: Token[];
+    shadows: Token[];
+  }> {
+    const fontFamilies: Token[] = [];
+    const fontSizes: Token[] = [];
+    const lineHeights: Token[] = [];
+    const blurs: Token[] = [];
+    const shadows: Token[] = [];
+
+    const rootColl = collections.get(ROOT_COLLECTION_NAME);
+    const stylesColl = collections.get(STYLE_COLLECTION_NAME);
+    const rootMode = rootColl?.defaultModeId;
+    const resolvedStylesMode = stylesMode ?? stylesColl?.defaultModeId;
+
+    if (rootColl && rootMode) {
+      let fontsStoredCount = 0;
+      for (const id of rootColl.variableIds) {
+        const variable = await figma.variables.getVariableByIdAsync(id);
+        if (!variable) continue;
+        const value = variable.valuesByMode[rootMode];
+
+        if (variable.name.startsWith('Typography/Family')) {
+          if (typeof value !== 'string') continue;
+          if (variable.name.toLowerCase().includes('mono')) {
+            fontFamilies.push({ token: 'font-mono', value: `"${value}", monospace` });
+          } else if (fontsStoredCount === 0) {
+            fontFamilies.push({ token: 'font-sans', value: `"${value}", sans-serif` });
+          } else if (fontsStoredCount === 1) {
+            fontFamilies.push({ token: 'font-serif', value: `"${value}", serif` });
+          }
+          fontsStoredCount++;
+        } else if (variable.name.startsWith('Effects/Blur')) {
+          const leaf = variable.name.split('/').pop()?.toLowerCase() ?? '';
+          if (typeof value !== 'number') continue;
+          blurs.push({ token: `blur-${leaf}`, value: `${value / 16}rem` });
+        } else if (variable.name.startsWith('Effects/Shadow')) {
+          const leaf = variable.name.split('/').pop()?.toLowerCase() ?? '';
+          if (typeof value !== 'number') continue;
+          shadows.push({ token: `drop-shadow-${leaf}`, value: `${value / 16}rem` });
+        }
+      }
+    }
+
+    if (stylesColl && resolvedStylesMode && rootMode) {
+      for (const id of stylesColl.variableIds) {
+        const variable = await figma.variables.getVariableByIdAsync(id);
+        if (!variable) continue;
+        const value = variable.valuesByMode[resolvedStylesMode];
+        if (!isAlias(value)) continue;
+
+        if (variable.name.startsWith('Typography/Font Size')) {
+          const leaf = variable.name.split('/').pop()?.toLowerCase() ?? '';
+          const target = await resolveAlias(value.id, ROOT_COLLECTION_NAME, resolvedStylesMode);
+          const px = target?.valuesByMode?.[rootMode];
+          if (typeof px !== 'number') continue;
+          fontSizes.push({ token: `text-${leaf}`, value: `${px / 16}rem` });
+        } else if (variable.name.startsWith('Typography/Line Height')) {
+          const leaf = variable.name.split('/').pop()?.toLowerCase() ?? '';
+          const target = await resolveAlias(value.id, ROOT_COLLECTION_NAME, resolvedStylesMode);
+          const px = target?.valuesByMode?.[rootMode];
+          if (typeof px !== 'number') continue;
+          lineHeights.push({ token: `text-${leaf}--line-height`, value: `${px / 16}rem` });
+        }
+      }
+    }
+
+    return { fontFamilies, fontSizes, lineHeights, blurs, shadows };
   }
 
   on('LOAD_MODES', async () => {
-    const collections = await figma.variables.getLocalVariableCollectionsAsync();
-    const modes = collections.reduce((cur, col) => {
-      if (col.name !== MODE_COLLECTION_NAME) {
-        return cur;
-      }
+    await loadCollections();
+    const modeColl = collections.get(MODE_COLLECTION_NAME);
+    const styleColl = collections.get(STYLE_COLLECTION_NAME);
 
-      for (const mode of col.modes) {
-        cur = {...cur, [mode.modeId]: mode.name};
-      }
-      return cur;
-    }, {} as Record<string, string>);
+    const modes: Record<string, string> = {};
+    for (const m of modeColl?.modes ?? []) modes[m.modeId] = m.name;
 
-    emit('LOADED_MODES', { modes });
+    const styleModes: Record<string, string> = {};
+    for (const m of styleColl?.modes ?? []) styleModes[m.modeId] = m.name;
+
+    emit('LOADED_MODES', {
+      modes,
+      defaultModeId: modeColl?.defaultModeId,
+      styleModes,
+      defaultStyleModeId: styleColl?.defaultModeId,
+    });
   });
 
   on('GENERATE_ROOT_VARIABLES', async () => {
-    const tokens = [];
-    const collections = await figma.variables.getLocalVariableCollectionsAsync();
-    const colorsCollection = collections.filter(({ name }) => name === ROOT_COLLECTION_NAME)?.[0];
-    const dimensionsCollection = collections.filter(({ name }) => name === DIMENSIONS_COLLECTION_NAME)?.[0];
-    const mode = colorsCollection?.modes?.[0]?.modeId; // Only one mode is supported for Root level
-    const dimensionsMode = dimensionsCollection?.modes?.[0]?.modeId; // Get the first mode as default
-
-    tokens.push('/* Colors */');
-    for (const variableId of colorsCollection?.variableIds || []) {
-      const variable = await figma.variables.getVariableByIdAsync(variableId);
-
-      // Only colors need to be exported
-      if (variable?.resolvedType === 'COLOR') {
-        const name = kebabCase(variable?.name);
-        const value = variable?.valuesByMode[mode];
-        const { r, g, b, a } = value as any;
-        const hex = chroma
-          .rgb(r * 255, g * 255, b * 255)
-          .alpha(a ?? 1)
-          .hex();
-
-        tokens.push({
-          token: name,
-          value: hex,
-        });
-      }
-    }
-
-    tokens.push('');
-    tokens.push('/* Dimensions */');
-    for (const variableId of dimensionsCollection?.variableIds || []) {
-      const variable = await figma.variables.getVariableByIdAsync(variableId);
-      const dimensionVariable = DIMENSIONS_VARIABLES.find((v) =>
-        variable?.name?.startsWith(v)
-      );
-
-      if (dimensionVariable) {
-        const name = variable?.name.split('/')?.pop()?.toLowerCase();
-        const value = variable?.valuesByMode?.[dimensionsMode];
-
-        if ((value as VariableAlias)?.type === 'VARIABLE_ALIAS') {
-          const targetVariable = await getNestedVariable(
-            (value as VariableAlias)?.id,
-            ROOT_COLLECTION_NAME
-          );
-          const firstValueMode = Object.keys(
-            targetVariable?.valuesByMode ?? {}
-          )[0];
-          const padding = targetVariable?.valuesByMode?.[
-            firstValueMode
-          ] as number;
-          tokens.push({
-            token: `${kebabCase(dimensionVariable)}-${kebabCase(name ?? '')}`,
-            value: `${padding}px`,
-          });
-        }
-      }
-    }
+    await loadCollections();
+    const colors = await collectRootColors();
+    const dimensions = await collectRootDimensions();
+    const tokens: (string | Token)[] = ['/* Colors */', ...colors, '', '/* Dimensions */', ...dimensions];
     emit('GENERATED_ROOT_VARIABLES', { tokens });
   });
 
-  on('GENERATE_MODE_VARIABLES', async ({ mode }) => {
-    const tokens = [];
-    const collections = await figma.variables.getLocalVariableCollectionsAsync();
-    const modesCollection = collections.filter(({ name }) => name === MODE_COLLECTION_NAME)?.[0];
-
-    for (const variableId of modesCollection?.variableIds || []) {
-      const variable = await figma.variables.getVariableByIdAsync(variableId);
-
-      // Only colors need to be exported
-      if (variable?.resolvedType === 'COLOR') {
-        const name = kebabCase(variable?.name);
-        const value = variable.valuesByMode[mode]
-
-        if ((value as VariableAlias)?.type === 'VARIABLE_ALIAS') {
-          const targetVariable = await getNestedVariable((value as VariableAlias)?.id, ROOT_COLLECTION_NAME);
-
-          tokens.push({
-            token: name,
-            value: kebabCase(targetVariable?.name ?? ''),
-          })
-        }
-      }
-    }
-
+  on('GENERATE_MODE_VARIABLES', async ({ mode }: { mode: string }) => {
+    await loadCollections();
+    const tokens = await collectModeTokens(mode);
     emit('GENERATED_MODE_VARIABLES', { tokens });
   });
 
   on('GENERATE_COMPONENT_VARIABLES', async () => {
-    const colorTokens = [];
-    const dimensionTokens = [];
-    const collections = await figma.variables.getLocalVariableCollectionsAsync();
-    const modesCollection = collections.filter(({ name }) => name === COMPONENTS_COLLECTION_NAME)?.[0];
-    const mode = modesCollection?.modes?.[0]?.modeId;
-
-    for (const variableId of modesCollection?.variableIds || []) {
-      const variable = await figma.variables.getVariableByIdAsync(variableId);
-
-      // Only colors need to be exported
-      if (variable?.resolvedType === 'COLOR') {
-        const name = kebabCase(variable?.name);
-        const value = variable.valuesByMode[mode]
-
-        if ((value as VariableAlias)?.type === 'VARIABLE_ALIAS') {
-          const targetVariable = await getNestedVariable((value as VariableAlias)?.id, MODE_COLLECTION_NAME);
-
-          colorTokens.push({
-            token: name,
-            value: `var(--${kebabCase(targetVariable?.name?.toLowerCase() ?? '')})`,
-          })
-        }
-      } else if (
-        Array.isArray(variable?.scopes) &&
-        ['GAP', 'WIDTH_HEIGHT', 'CORNER_RADIUS'].some((scope) => variable.scopes.includes(scope as VariableScope))
-      ) {
-        const name = kebabCase(variable?.name);
-        const value = variable.valuesByMode[mode];
-        
-        if ((value as VariableAlias)?.type === 'VARIABLE_ALIAS') {
-          let tokenValue = '';
-          const dimensionVariable = await getNestedVariable((value as VariableAlias)?.id, DIMENSIONS_COLLECTION_NAME);
-          if (!dimensionVariable) {
-            const targetVariable = await getNestedVariable(
-              (value as VariableAlias)?.id,
-              ROOT_COLLECTION_NAME
-            );
-            const firstValueMode = Object.keys(targetVariable?.valuesByMode ?? {})?.[0];
-            tokenValue = `${targetVariable?.valuesByMode?.[firstValueMode]}px`;
-          } else {
-            const name = dimensionVariable?.name?.toLowerCase() ?? ''
-            tokenValue = `var(--${kebabCase(name)})`
-          }
-  
-          dimensionTokens.push({
-            token: kebabCase(name ?? ''),
-            value: tokenValue,
-          })
-        }
-      }
-    }
-
-    const tokens: (string | { token: string; value: string })[] = [];
-    if (colorTokens.length > 0) {
-      tokens.push("/* Color Tokens */");
-      tokens.push(...colorTokens);
-    }
-    if (dimensionTokens.length > 0) {
-      tokens.push('');
-      tokens.push("/* Dimension Tokens */");
-      tokens.push(...dimensionTokens);
-    }
-
+    await loadCollections();
+    const { colors, dimensions } = await collectComponentTokens();
+    const tokens: (string | Token)[] = [];
+    if (colors.length) tokens.push('/* Color Tokens */', ...colors);
+    if (dimensions.length) tokens.push('', '/* Dimension Tokens */', ...dimensions);
     emit('GENERATED_COMPONENT_VARIABLES', { tokens });
   });
 
-  on('GENERATE_OTHER_VARIABLES', async () => {
-    const tokens = [];
-    const collections = await figma.variables.getLocalVariableCollectionsAsync();
-    const stylesCollection = collections.filter(({ name }) => name === STYLE_COLLECTION_NAME)?.[0];
-    const rootCollection = collections.filter(({ name }) => name === ROOT_COLLECTION_NAME)?.[0];
-    const rootMode = rootCollection?.modes?.[0]?.modeId; // Only one mode is supported for Root level
-    const stylesMode = stylesCollection?.modes?.[0]?.modeId; // Only one mode is supported for Root level
-
-    let fontsStoredCount = 0;
-
-    tokens.push('/* Font Families */');
-    for (const variableId of rootCollection?.variableIds || []) {
-      const variable = await figma.variables.getVariableByIdAsync(variableId);
-
-      if (variable?.name?.startsWith('Typography/Family')) {
-        if (variable?.name?.toLowerCase()?.includes('mono')) {
-          tokens.push({
-            token: 'font-mono',
-            value: `"${variable?.valuesByMode[rootMode]}", monospace`
-          })
-        } else if (fontsStoredCount === 0) {
-          tokens.push({
-            token: 'font-sans',
-            value: `"${variable?.valuesByMode[rootMode]}", sans-serif`
-          });
-        } else if (fontsStoredCount === 1) {
-          tokens.push({
-            token: 'font-serif',
-            value: `"${variable?.valuesByMode[rootMode]}", serif`
-          });
-        }
-        fontsStoredCount++;
-      }
-    }
-
-    tokens.push('');
-    tokens.push('/* Font Sizes */');
-    for (const variableId of stylesCollection?.variableIds || []) {
-      const variable = await figma.variables.getVariableByIdAsync(variableId);
-
-      if (variable?.name?.startsWith('Typography/Font Size')) {
-        const name = variable?.name.split('/')?.pop()?.toLowerCase();
-        const value = variable.valuesByMode[stylesMode]
-
-        if ((value as VariableAlias)?.type === 'VARIABLE_ALIAS') {
-          const targetVariable = await getNestedVariable((value as VariableAlias)?.id, ROOT_COLLECTION_NAME);
-          const fontSize = targetVariable?.valuesByMode?.[rootMode] as number;
-          tokens.push({
-            token: `text-${name}`,
-            value: `${fontSize / 16}rem`,
-          })
-        }
-      }
-    }
-
-    tokens.push('');
-    tokens.push('/* Line Heights */');
-    for (const variableId of stylesCollection?.variableIds || []) {
-      const variable = await figma.variables.getVariableByIdAsync(variableId);
-
-      if (variable?.name?.startsWith('Typography/Line Height')) {
-        const name = variable?.name.split('/')?.pop()?.toLowerCase();
-        const value = variable.valuesByMode[stylesMode]
-
-        if ((value as VariableAlias)?.type === 'VARIABLE_ALIAS') {
-          const targetVariable = await getNestedVariable((value as VariableAlias)?.id, ROOT_COLLECTION_NAME);
-          const fontSize = targetVariable?.valuesByMode?.[rootMode] as number;
-          tokens.push({
-            token: `text-${name}--line-height`,
-            value: `${fontSize / 16}rem`,
-          })
-        }
-      }
-    }
-
-    tokens.push('');
-    tokens.push('/* Blur */');
-    for (const variableId of rootCollection?.variableIds || []) {
-      const variable = await figma.variables.getVariableByIdAsync(variableId);
-
-      if (variable?.name?.startsWith('Effects/Blur')) {
-        const name = variable?.name.split('/')?.pop()?.toLowerCase();
-        const value = variable.valuesByMode[rootMode] as number;
-
-        tokens.push({
-          token: `blur-${name}`,
-          value: `${value / 16}rem`,
-        })
-      }
-    }
-
-    tokens.push('');
-    tokens.push('/* Shadow */');
-    for (const variableId of rootCollection?.variableIds || []) {
-      const variable = await figma.variables.getVariableByIdAsync(variableId);
-
-      if (variable?.name?.startsWith('Effects/Shadow')) {
-        const name = variable?.name.split('/')?.pop()?.toLowerCase();
-        const value = variable.valuesByMode[rootMode] as number;
-
-        tokens.push({
-          token: `drop-shadow-${name}`,
-          value: `${value / 16}rem`,
-        })
-      }
-    }
-
+  on('GENERATE_OTHER_VARIABLES', async ({ styleMode }: { styleMode?: string } = {}) => {
+    await loadCollections();
+    const { fontFamilies, fontSizes, lineHeights, blurs, shadows } =
+      await collectTypography(styleMode);
+    const tokens: (string | Token)[] = [
+      '/* Font Families */',
+      ...fontFamilies,
+      '',
+      '/* Font Sizes */',
+      ...fontSizes,
+      '',
+      '/* Line Heights */',
+      ...lineHeights,
+      '',
+      '/* Blur */',
+      ...blurs,
+      '',
+      '/* Shadow */',
+      ...shadows,
+    ];
     emit('GENERATED_OTHER_VARIABLES', { tokens });
   });
 
-  showUI({ height: 500, width: 400 });
+  on('EXPORT_ALL', async ({ styleMode }: { styleMode?: string } = {}) => {
+    await loadCollections();
+    const modesColl = collections.get(MODE_COLLECTION_NAME);
+
+    const rootColors = await collectRootColors();
+    const rootDimensions = await collectRootDimensions();
+
+    const modes: Record<string, Token[]> = {};
+    for (const m of modesColl?.modes ?? []) {
+      modes[m.name] = await collectModeTokens(m.modeId);
+    }
+
+    const { colors: componentColors, dimensions: componentDimensions } =
+      await collectComponentTokens();
+    const { fontFamilies, fontSizes, lineHeights, blurs, shadows } =
+      await collectTypography(styleMode);
+
+    emit('EXPORTED_ALL', {
+      fileName: figma.root.name,
+      rootColors,
+      rootDimensions,
+      modes,
+      componentColors,
+      componentDimensions,
+      fontFamilies,
+      fontSizes,
+      lineHeights,
+      blurs,
+      shadows,
+    });
+  });
+
+  showUI({ height: 540, width: 400 });
 }

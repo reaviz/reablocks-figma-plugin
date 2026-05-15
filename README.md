@@ -6,28 +6,56 @@ Plugin utilities to super charge your dev work for [reablocks](https://github.co
 
 ## Features
 
-- CSS Token Generator: Generate Reablock compatible json from Figma Style variables
+- **Export Styles**: One-click generation of a ready-to-use CSS bundle (zip) containing all theme files
+- **Inspect Variables**: Browse and copy individual token sections (root, mode, component, other)
 
-## CSS Token Generator Usage
+## Export Styles (ready-to-use CSS bundle)
+
+The plugin's primary action exports a zip of CSS files you can drop straight into a reablocks-based project. No manual copy/paste required.
 
 ### Pre-requisite
 
-- You should have style created for all colors that you want to use in the project
-- You should use following naming convention to assign style property to your colors
+The Figma file must use the Unify Design System variable collections (`Lvl 01 - Root`, `Lvl 02 - Style`, `Lvl 03 (A) - Mode`, `Lvl 03 (C) - Dimension`, `Lvl 04 - Component`). If the plugin can't find these, it shows a "Heads up" screen pointing at [unifydesignsystem.com](https://unifydesignsystem.com).
 
-  - E.g.: 'Primary', 'Brand', 'Primary/100', 'Brand/title black 100'``
+### Running the export
 
-### Running Plugin
+1. Open the Figma file in the Figma desktop app.
+2. Run the **Reablocks Figma Plugin** from the Quick Actions menu (`CMD + P` / `Ctrl + P`).
+3. (Optional) If your file has multiple **Style** modes, pick the one you want to export from the **Style** dropdown.
+4. Pick the **Default theme** (`Dark` or `Light`) — this is the theme that will be applied at `:root` without needing a wrapping class.
+5. Click **Export Styles**. Your browser downloads `<file-name>-styles.zip`.
 
-- Go to the Figma design file where you want to use the plugin
-- Use `CMD + p` to open quick menu
-- Search for new plugins using "Find More plugins option" and search for "Reablocks Figma Plugin"
-- Once found, click on run plugin, it will open a popup
-- Click on "Generate Tokens"
-- Click on "Copy Colors" to grab all of color tokens
-- Use the copied tokens in your project's color palette
-- Click on "Copy Themes" to grab all of your design tokens for your theme
-- Use the copied tokens in your project's theme
+### What's in the zip
+
+| File | Purpose |
+| --- | --- |
+| `index.css` | Entry point — imports the other files in the correct order. |
+| `common.css` | Base resets, font smoothing, `:root` body styles, tooltip vars. |
+| `root.css` | Concrete color hexes and dimension pixel values (the "Level 1" tokens). |
+| `light.css` | Light-theme mode tokens. Emitted at `:root` if you picked Light as default, otherwise wrapped in `.theme-light` / `[data-theme='light']` selectors. |
+| `dark.css` | Dark-theme mode tokens. Same default/wrapped behavior as `light.css`. |
+| `tw.css` | Tailwind v4 `@theme inline` config that re-exports every token for use with Tailwind utility classes. |
+
+### Using the bundle in your project
+
+1. Unzip the archive into your styles folder (e.g. `src/styles/`).
+2. Import the entry file once from your app's global stylesheet:
+   ```css
+   @import "./styles/index.css";
+   ```
+3. Switch themes at runtime by toggling a class on a wrapping element (or by setting `data-theme`):
+   ```html
+   <html class="theme-dark">  <!-- or class="theme-light" / data-theme="light" -->
+   ```
+   You only need this for the *non-default* theme — the default one is already applied at `:root`.
+
+## Inspect Variables (copy individual sections)
+
+For ad-hoc inspection or pulling a single section into an existing stylesheet, open the **Inspect variables** disclosure under the export button:
+
+1. Pick a **Mode** to resolve color aliases against.
+2. Click **Generate**. Four sections populate: Root, Mode, Component, and Other (fonts/blurs/shadows).
+3. Click **Copy** under any section to put that block on the clipboard.
 
 ## Development guide
 
