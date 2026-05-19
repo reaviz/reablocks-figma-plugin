@@ -70,6 +70,7 @@ function Plugin() {
 
   const copyTimers = useRef<Record<string, number>>({});
   const exportInFlight = useRef(false);
+  const exportUnsubscribe = useRef<(() => void) | null>(null);
 
   /**
    * Schedules a deferred state reset (used to revert button labels like
@@ -159,6 +160,10 @@ function Plugin() {
     let timeoutId: number | undefined;
     const finish = (text: string) => {
       if (timeoutId) clearTimeout(timeoutId);
+      if (exportUnsubscribe.current) {
+        exportUnsubscribe.current();
+        exportUnsubscribe.current = null;
+      }
       exportInFlight.current = false;
       setExportButtonText(text);
       if (text !== EXPORT_TITLE) {
@@ -171,7 +176,7 @@ function Plugin() {
       finish(EXPORT_TITLE);
     }, EXPORT_TIMEOUT_MS);
 
-    once('EXPORTED_ALL', async (payload: ExportPayload) => {
+    exportUnsubscribe.current = once('EXPORTED_ALL', async (payload: ExportPayload) => {
       try {
         const files = buildAllFiles(payload, rootTheme);
         const zip = new JSZip();
@@ -283,6 +288,10 @@ function Plugin() {
       offMode();
       offComponent();
       offOther();
+      if (exportUnsubscribe.current) {
+        exportUnsubscribe.current();
+        exportUnsubscribe.current = null;
+      }
       for (const id of Object.values(timers)) clearTimeout(id);
     };
   }, []);

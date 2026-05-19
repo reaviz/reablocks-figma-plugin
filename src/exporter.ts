@@ -305,11 +305,21 @@ export function buildAllFiles(
 
   const entries = Object.entries(data.modes);
   let lightEntry = entries.find(([n]) => /\blight\b/i.test(n));
-  let darkEntry = entries.find(([n]) => /\bdark\b/i.test(n));
+  let darkEntry = entries.find(([n]) => /\bdark\b/i.test(n) && n !== lightEntry?.[0]);
 
   // Fall back to substring match if word-boundary didn't catch a mode name.
-  if (!lightEntry) lightEntry = entries.find(([n]) => n.toLowerCase().includes('light'));
-  if (!darkEntry) darkEntry = entries.find(([n]) => n.toLowerCase().includes('dark'));
+  // Exclude the other slot's entry so an ambiguous name (e.g. "Light Dark Hybrid"
+  // or "darklight") can't be emitted as both light.css and dark.css.
+  if (!lightEntry) {
+    lightEntry = entries.find(
+      ([n]) => n.toLowerCase().includes('light') && n !== darkEntry?.[0]
+    );
+  }
+  if (!darkEntry) {
+    darkEntry = entries.find(
+      ([n]) => n.toLowerCase().includes('dark') && n !== lightEntry?.[0]
+    );
+  }
 
   if (lightEntry) {
     const builder = defaultMode === 'light' ? buildDefaultModeCss : buildWrappedModeCss;
